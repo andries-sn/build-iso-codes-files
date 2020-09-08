@@ -1,0 +1,22 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+plugins {
+    kotlin("jvm") version "1.4.0"
+    application
+}
+group = "me.andries.make-iso-codes"
+version = "1.0-SNAPSHOT"
+
+repositories {
+    mavenCentral()
+}
+dependencies {
+    testImplementation(kotlin("test-junit5"))
+    implementation("org.apache.commons:commons-text:1.9")
+}
+tasks.withType<KotlinCompile>() {
+    kotlinOptions.jvmTarget = "1.8"
+}
+application {
+    mainClassName = "MainKt"
+}
