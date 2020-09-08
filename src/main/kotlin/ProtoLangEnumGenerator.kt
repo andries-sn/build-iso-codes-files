@@ -1,34 +1,30 @@
+import java.io.BufferedReader
 import java.io.File
 import java.io.PrintStream
 import java.util.stream.Stream
 import kotlin.streams.asSequence
 
-class ProtoLangEnumGenerator {
+class ProtoLangEnumGenerator(
+    private val blackedListedIsoCodes: Set<String>,
+    private val openTableData: () -> BufferedReader
+) {
 
-    private val blackedListedIsoCodes = setOf("peo", "qaa-qtz", "dum", "grc", "ina", "mga", "sga", "ota")
-
-    data class IsoLanguageCode(
-        val iso639_1: String,
-        val iso639_2: String,
-        val description: String
-    )
-
-    fun generate(markDownDataFile: File, output: PrintStream) {
+    fun generate(output: PrintStream) {
 
         val stripHeader = fun Stream<String>.() = skip(2).asSequence()
         val extractIsoCodes =
             fun Sequence<String>.() = run { map { line -> line.splitToSequence("|").take(4).toList() } }
 
         val buildIsoLangData = fun Sequence<List<String>>.() = map { r ->
-            IsoLanguageCode(
+            IsoLanguageCodes(
                 iso639_2 = r[1].asSanitisedIsoCode(),
                 iso639_1 = r[2].asSanitisedIsoCode(),
                 description = r[3].split(";").map(String::trim).first()
             )
         }
 
-        val generateIsoLangProtoEnumEntry = fun(isoLanguageCode: IsoLanguageCode, seq: Int) = buildString {
-            val finalCode = isoLanguageCode.iso639_2
+        val generateIsoLangProtoEnumEntry = fun(isoLanguageCodes: IsoLanguageCodes, seq: Int) = buildString {
+            val finalCode = isoLanguageCodes.iso639_2
             append("  ")
             append("LANGUAGE_")
             append(finalCode.toUpperCase())
@@ -36,18 +32,18 @@ class ProtoLangEnumGenerator {
             append(seq)
             append("; ")
             append("// ")
-            append(isoLanguageCode.description)
+            append(isoLanguageCodes.description)
         }
 
-        val skipGarbageIsoCodes = fun Sequence<IsoLanguageCode>.() = filter {
+        val skipGarbageIsoCodes = fun Sequence<IsoLanguageCodes>.() = filter {
             it.description.isNotBlank()
                     && (it.iso639_2 !in blackedListedIsoCodes)
         }
 
-        val unknownLanguageCode = IsoLanguageCode("", "UNKNOWN", "Language is not known.")
+        val unknownLanguageCode = IsoLanguageCodes("", "UNKNOWN", "Language is not known.")
 
-        val ensureEnglishLangCodeContractIsNotBroken = fun Sequence<IsoLanguageCode>.(): List<IsoLanguageCode> {
-            val languages = toSortedSet(compareBy(IsoLanguageCode::description)).toMutableList()
+        val ensureEnglishLangCodeContractIsNotBroken = fun Sequence<IsoLanguageCodes>.(): List<IsoLanguageCodes> {
+            val languages = toSortedSet(compareBy(IsoLanguageCodes::description)).toMutableList()
             val givenPositionOfEnglishCode = languages.indexOfFirst { it.iso639_2 == "eng" }
             val expectedEnglishToBeFirst = languages.removeAt(givenPositionOfEnglishCode).copy(iso639_2 = "en")
             languages.add(0, unknownLanguageCode)
@@ -55,7 +51,7 @@ class ProtoLangEnumGenerator {
             return languages.toList()
         }
 
-        val languageCodes = markDownDataFile.bufferedReader().use {
+        val languageCodes = openTableData().use {
             it.lines()
                 .stripHeader()
                 .extractIsoCodes()
